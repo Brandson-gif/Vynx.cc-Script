@@ -1,0 +1,947 @@
+-- Vynx.cc MM2 Script - Complete Murder Mystery 2 Utility
+-- Press Insert to open/close | Drag from title bar | Tabs with fold animations
+-- Features: ESP (murderer/sheriff/innocent + guns), Silent Aimbot (closest murderer), Auto-Collect (realistic tween), Teleport to roles/spawn/center
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+-- Wait for LocalPlayer
+repeat task.wait() until LocalPlayer
+
+-- UI Settings
+local settings = {
+    MenuVisible = true,
+    Keybinds = { ToggleMenu = Enum.KeyCode.Insert }
+}
+
+-- Optimized cache
+local math_clamp = math.clamp
+local math_floor = math.floor
+local Vector2_new = Vector2.new
+local Color3_fromRGB = Color3.fromRGB
+local tick = tick
+local task_wait = task.wait
+local task_spawn = task.spawn
+
+-- GUI Parent
+local parentGui = LocalPlayer:FindFirstChild("PlayerGui") or CoreGui
+
+local function new(class, props)
+    local obj = Instance.new(class)
+    for k, v in pairs(props or {}) do obj[k] = v end
+    return obj
+end
+
+-- Main GUI
+local screenGui = new("ScreenGui", {
+    Name = "VynxMM2",
+    Parent = parentGui,
+    ResetOnSpawn = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Global,
+    DisplayOrder = 999,
+})
+
+local Z = 2000
+local WIDTH, HEIGHT = 850, 500
+
+local main = new("Frame", {
+    Parent = screenGui,
+    Name = "MainFrame",
+    Size = UDim2.new(0, WIDTH, 0, HEIGHT),
+    Position = UDim2.new(0.5, -WIDTH / 2, 0.5, -HEIGHT / 2),
+    BackgroundColor3 = Color3_fromRGB(18, 18, 18),
+    BorderSizePixel = 0,
+    ZIndex = Z,
+    ClipsDescendants = true
+})
+new("UICorner", { Parent = main, CornerRadius = UDim.new(0, 10) })
+new("UIStroke", { Parent = main, Color = Color3_fromRGB(200, 0, 0), Thickness = 1 })
+
+-- Title bar for dragging
+local titleBar = new("Frame", {
+    Parent = main,
+    Name = "TitleBar",
+    Size = UDim2.new(1, 0, 0, 40),
+    BackgroundColor3 = Color3_fromRGB(25, 25, 25),
+    BorderSizePixel = 0,
+    ZIndex = Z + 1
+})
+new("UICorner", { Parent = titleBar, CornerRadius = UDim.new(0, 10, 0, 0) })
+
+local title = new("TextLabel", {
+    Parent = titleBar,
+    Text = "Vynx.cc MM2",
+    Font = Enum.Font.GothamBold,
+    TextSize = 26,
+    TextColor3 = Color3_fromRGB(255, 80, 80),
+    BackgroundTransparency = 1,
+    Position = UDim2.new(0, 20, 0, 0),
+    Size = UDim2.new(0, 200, 1, 0),
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = Z + 1
+})
+
+-- Sidebar
+local sidebar = new("Frame", {
+    Parent = main,
+    Size = UDim2.new(0, 180, 1, -60),
+    Position = UDim2.new(0, 10, 0, 50),
+    BackgroundColor3 = Color3_fromRGB(15, 15, 15),
+    BorderSizePixel = 0,
+    ZIndex = Z
+})
+new("UICorner", { Parent = sidebar, CornerRadius = UDim.new(0, 8) })
+
+local tabLayout = new("UIListLayout", {
+    Parent = sidebar,
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Padding = UDim.new(0, 8),
+})
+local tabPadding = new("UIPadding", {
+    Parent = sidebar,
+    PaddingTop = UDim.new(0, 14),
+    PaddingLeft = UDim.new(0, 10),
+})
+
+-- Content area
+local content = new("Frame", {
+    Parent = main,
+    Size = UDim2.new(1, -210, 1, -60),
+    Position = UDim2.new(0, 200, 0, 50),
+    BackgroundColor3 = Color3_fromRGB(22, 22, 22),
+    BorderSizePixel = 0,
+    ZIndex = Z,
+    ClipsDescendants = true
+})
+new("UICorner", { Parent = content, CornerRadius = UDim.new(0, 8) })
+
+-- Notification system
+local notificationFrame = new("Frame", {
+    Parent = screenGui,
+    Name = "Notification",
+    Size = UDim2.new(0, 240, 0, 50),
+    Position = UDim2.new(0.5, -120, 0.1, -50),
+    BackgroundColor3 = Color3_fromRGB(30, 30, 30),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ZIndex = 3000,
+    Visible = false
+})
+new("UICorner", { Parent = notificationFrame, CornerRadius = UDim.new(0, 8) })
+new("UIStroke", { Parent = notificationFrame, Color = Color3_fromRGB(88, 101, 242), Thickness = 2 })
+local notificationLabel = new("TextLabel", {
+    Parent = notificationFrame,
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "",
+    TextColor3 = Color3_fromRGB(255, 255, 255),
+    TextSize = 16,
+    Font = Enum.Font.GothamBold,
+    ZIndex = 3001
+})
+
+local function showNotification(msg, duration)
+    duration = duration or 3
+    notificationLabel.Text = msg
+    notificationFrame.Visible = true
+    notificationFrame.BackgroundTransparency = 1
+    notificationFrame.Position = UDim2.new(0.5, -120, 0.1, -50)
+    TweenService:Create(notificationFrame, TweenInfo.new(0.3), {
+        BackgroundTransparency = 0,
+        Position = UDim2.new(0.5, -120, 0.1, 0)
+    }):Play()
+    task_spawn(function()
+        task_wait(duration)
+        local fade = TweenService:Create(notificationFrame, TweenInfo.new(0.3), {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0.5, -120, 0.1, -50)
+        })
+        fade:Play()
+        fade.Completed:Wait()
+        notificationFrame.Visible = false
+    end)
+end
+
+-- Discord button
+local discordButton = new("TextButton", {
+    Parent = main,
+    Name = "Discord",
+    Size = UDim2.new(0, 160, 0, 30),
+    Position = UDim2.new(0, 10, 1, -35),
+    BackgroundColor3 = Color3_fromRGB(88, 101, 242),
+    BorderSizePixel = 0,
+    Text = "Join Discord",
+    Font = Enum.Font.Gotham,
+    TextSize = 12,
+    TextColor3 = Color3_fromRGB(255, 255, 255),
+    ZIndex = Z + 1,
+    AutoButtonColor = false
+})
+new("UICorner", { Parent = discordButton, CornerRadius = UDim.new(0, 6) })
+discordButton.MouseEnter:Connect(function()
+    TweenService:Create(discordButton, TweenInfo.new(0.15), { BackgroundColor3 = Color3_fromRGB(71, 82, 196) }):Play()
+end)
+discordButton.MouseLeave:Connect(function()
+    TweenService:Create(discordButton, TweenInfo.new(0.15), { BackgroundColor3 = Color3_fromRGB(88, 101, 242) }):Play()
+end)
+discordButton.MouseButton1Click:Connect(function()
+    local success = pcall(function()
+        game:GetService("GuiService"):OpenBrowserWindow("https://discord.gg/wYzQeXGyqH")
+    end)
+    if not success then
+        if setclipboard then
+            setclipboard("https://discord.gg/wYzQeXGyqH")
+            showNotification("Discord link copied!", 3)
+        else
+            showNotification("discord.gg/wYzQeXGyqH", 3)
+        end
+    else
+        showNotification("Discord opened!", 2)
+    end
+end)
+
+-- Tabs
+local tabs = {}
+local pages = {}
+local tabNames = { "Home", "ESP", "Aimbot", "Auto", "Teleport", "Settings", "About" }
+
+local function createTab(name)
+    local btn = new("TextButton", {
+        Parent = sidebar,
+        Text = name,
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        TextColor3 = Color3_fromRGB(230, 230, 230),
+        BackgroundColor3 = Color3_fromRGB(30, 30, 30),
+        AutoButtonColor = false,
+        Size = UDim2.new(1, -20, 0, 36),
+        ZIndex = Z
+    })
+    new("UICorner", { Parent = btn, CornerRadius = UDim.new(0, 6) })
+    local border = new("UIStroke", {
+        Parent = btn,
+        Color = Color3_fromRGB(255, 60, 60),
+        Thickness = 1.8,
+        Transparency = 0,
+        Enabled = false
+    })
+    local page = new("ScrollingFrame", {
+        Parent = content,
+        Name = name .. "Page",
+        BackgroundTransparency = 1,
+        Visible = false,
+        Size = UDim2.new(1, 0, 1, 0),
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Color3_fromRGB(80, 80, 100),
+        ZIndex = Z,
+        ClipsDescendants = true
+    })
+    new("UIListLayout", { Parent = page, Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
+    tabs[name] = { Button = btn, Border = border }
+    pages[name] = page
+end
+
+for _, name in ipairs(tabNames) do
+    createTab(name)
+end
+
+-- Tab switching with fold animation
+local currentTab = "Home"
+tabs[currentTab].Border.Enabled = true
+pages[currentTab].Visible = true
+tabs[currentTab].Button.BackgroundColor3 = Color3_fromRGB(40, 40, 40)
+
+for name, data in pairs(tabs) do
+    data.Button.MouseButton1Click:Connect(function()
+        if currentTab == name then return end
+        local oldTab = tabs[currentTab]
+        local newTab = data
+        local oldPage = pages[currentTab]
+        local newPage = pages[name]
+
+        task_spawn(function()
+            -- Fold away current page
+            local fold = TweenService:Create(oldPage, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {
+                Position = UDim2.new(0, 0, 0, -oldPage.AbsoluteSize.Y),
+                Size = UDim2.new(1, 0, 0, 0)
+            })
+            fold:Play()
+            fold.Completed:Wait()
+            oldPage.Visible = false
+            oldPage.Position = UDim2.new(0, 0, 0, 0)
+            oldPage.Size = UDim2.new(1, 0, 1, 0)
+            oldTab.Border.Enabled = false
+            oldTab.Button.BackgroundColor3 = Color3_fromRGB(30, 30, 30)
+
+            -- Prepare new page
+            newPage.Visible = true
+            newPage.Position = UDim2.new(0, 0, 0, -newPage.AbsoluteSize.Y)
+            newPage.Size = UDim2.new(1, 0, 0, 0)
+            newTab.Border.Enabled = true
+            newTab.Button.BackgroundColor3 = Color3_fromRGB(40, 40, 40)
+            TweenService:Create(newPage, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
+                Position = UDim2.new(0, 0, 0, 0),
+                Size = UDim2.new(1, 0, 1, 0)
+            }):Play()
+            currentTab = name
+        end)
+    end)
+end
+
+--------------------------------------------------------------------
+-- MM2 Feature Flags
+local Features = {
+    PlayerESP = false,
+    GunESP = false,
+    Aimbot = false,
+    AutoCollect = false,
+    TeamCheck = false,
+}
+
+-- Aimbot settings
+local AimbotSettings = {
+    Silent = true,
+    AimPart = "Head",
+}
+
+-- Auto-collect settings
+local AutoCollect = {
+    Enabled = false,
+    Range = 50,
+    CollectCoins = true,
+    CollectGifts = true,
+    TweenSpeed = 25,
+}
+
+--------------------------------------------------------------------
+-- ESP Module
+local ESPCache = {}
+local Camera = Workspace.CurrentCamera
+
+local function clearPlayerESP()
+    for player, data in pairs(ESPCache) do
+        if type(player) ~= "string" and data and data.highlight then
+            data.highlight:Destroy()
+            data.highlight = nil
+        end
+    end
+    for _, v in ipairs(screenGui:GetDescendants()) do
+        if v.Name == "PlayerESPHighlight" and v:IsA("Highlight") then
+            v:Destroy()
+        end
+    end
+end
+
+local function clearGunESP()
+    for k, data in pairs(ESPCache) do
+        if type(k) == "string" and k:sub(1,3) == "gun" and data and data.highlight then
+            data.highlight:Destroy()
+            data.highlight = nil
+        end
+    end
+    for _, v in ipairs(screenGui:GetDescendants()) do
+        if v.Name == "GunESPHighlight" and v:IsA("Highlight") then
+            v:Destroy()
+        end
+    end
+end
+
+local function getPlayerRole(player)
+    if ESPCache[player] and ESPCache[player].roleTime and tick() - ESPCache[player].roleTime < 1 then
+        return ESPCache[player].role
+    end
+    local role = "Innocent"
+    local character = player.Character
+    if character then
+        if character:FindFirstChild("Knife") or (player.Backpack and player.Backpack:FindFirstChild("Knife")) then
+            role = "Murderer"
+        elseif character:FindFirstChild("Gun") or (player.Backpack and player.Backpack:FindFirstChild("Gun")) then
+            role = "Sheriff"
+        end
+    end
+    if not ESPCache[player] then ESPCache[player] = {} end
+    ESPCache[player].role = role
+    ESPCache[player].roleTime = tick()
+    return role
+end
+
+local function updatePlayerESP()
+    if not Features.PlayerESP then return end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local role = getPlayerRole(player)
+            local color = role == "Murderer" and Color3_fromRGB(255, 50, 50)
+                     or (role == "Sheriff" and Color3_fromRGB(50, 150, 255)
+                     or Color3_fromRGB(50, 255, 100))
+            if not ESPCache[player] or not ESPCache[player].highlight then
+                local hl = Instance.new("Highlight")
+                hl.Name = "PlayerESPHighlight"
+                hl.FillTransparency = 0.4
+                hl.OutlineTransparency = 0
+                hl.OutlineColor = Color3.new(1,1,1)
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.Adornee = player.Character
+                hl.Parent = screenGui
+                ESPCache[player] = ESPCache[player] or {}
+                ESPCache[player].highlight = hl
+            else
+                ESPCache[player].highlight.Adornee = player.Character
+            end
+            ESPCache[player].highlight.FillColor = color
+        end
+    end
+end
+
+-- Gun ESP: highlights any part named "Gun" not held by a player
+local function updateGunESP()
+    if not Features.GunESP then return end
+
+    -- Clean up old highlights
+    for key, data in pairs(ESPCache) do
+        if type(key) == "string" and key:sub(1,3) == "gun" and data.highlight then
+            if not data.gun or not data.gun:IsDescendant(Workspace) then
+                data.highlight:Destroy()
+                ESPCache[key] = nil
+            end
+        end
+    end
+
+    -- Scan for dropped guns
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name:lower() == "gun" then
+            -- Check if held by a player
+            local parent = obj.Parent
+            local isHeld = false
+            while parent do
+                if parent:IsA("Model") and Players:GetPlayerFromCharacter(parent) then
+                    isHeld = true
+                    break
+                end
+                parent = parent.Parent
+            end
+            if not isHeld then
+                local key = "gun_" .. tostring(obj)
+                if not ESPCache[key] then
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "GunESPHighlight"
+                    hl.FillColor = Color3_fromRGB(0, 255, 0)
+                    hl.OutlineColor = Color3.new(1,1,1)
+                    hl.FillTransparency = 0.3
+                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    hl.Adornee = obj
+                    hl.Parent = screenGui
+                    ESPCache[key] = { highlight = hl, gun = obj }
+                end
+            end
+        end
+    end
+end
+
+task_spawn(function()
+    while true do
+        if Features.PlayerESP then
+            updatePlayerESP()
+        end
+        if Features.GunESP then
+            updateGunESP()
+        end
+        task_wait(1)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if ESPCache[p] and ESPCache[p].highlight then
+        ESPCache[p].highlight:Destroy()
+        ESPCache[p].highlight = nil
+    end
+    ESPCache[p] = nil
+end)
+
+--------------------------------------------------------------------
+-- Silent Aimbot (closest murderer on screen)
+local function getClosestMurderer()
+    local maxDist = math.huge
+    local target = nil
+    local mousePos = UIS:GetMouseLocation()
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and getPlayerRole(player) == "Murderer" then
+            if Features.TeamCheck and player.Team == LocalPlayer.Team then
+                continue
+            end
+            local character = player.Character
+            if character and character:FindFirstChild(AimbotSettings.AimPart) then
+                local part = character[AimbotSettings.AimPart]
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2_new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if dist < maxDist then
+                        maxDist = dist
+                        target = player
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
+
+-- Hook the gun remote
+local function setupSilentAim()
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Gun")
+    if not tool then
+        tool = LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Gun")
+    end
+    if not tool then return end
+
+    local remote = tool:FindFirstChild("Shoot") or tool:FindFirstChild("Fire") or tool:FindFirstChild("Remote") or tool:FindFirstChildWhichIsA("RemoteEvent")
+    if not remote then
+        warn("Gun remote not found")
+        return
+    end
+
+    local oldFire = remote.FireServer
+    remote.FireServer = function(self, ...)
+        if Features.Aimbot and AimbotSettings.Silent then
+            local target = getClosestMurderer()
+            if target and target.Character and target.Character:FindFirstChild(AimbotSettings.AimPart) then
+                local targetPart = target.Character[AimbotSettings.AimPart]
+                local args = {...}
+                -- Try to replace arguments to aim at murderer
+                if #args >= 1 then
+                    if typeof(args[1]) == "Instance" and args[1]:IsA("BasePart") then
+                        args[1] = targetPart
+                    end
+                end
+                if #args >= 2 then
+                    if typeof(args[2]) == "Vector3" then
+                        args[2] = targetPart.Position
+                    end
+                end
+                if #args == 1 then
+                    if typeof(args[1]) == "CFrame" then
+                        args[1] = CFrame.new(targetPart.Position)
+                    elseif typeof(args[1]) == "Vector3" then
+                        args[1] = targetPart.Position
+                    end
+                end
+                return oldFire(self, unpack(args))
+            end
+        end
+        return oldFire(self, ...)
+    end
+end
+
+-- Re-setup on gun equip
+LocalPlayer.CharacterAdded:Connect(function(char)
+    char.ChildAdded:Connect(function(child)
+        if child.Name == "Gun" then
+            task.wait(0.1)
+            setupSilentAim()
+        end
+    end)
+end)
+LocalPlayer.Backpack.ChildAdded:Connect(function(child)
+    if child.Name == "Gun" then
+        task.wait(0.1)
+        setupSilentAim()
+    end
+end)
+
+task.wait(1)
+setupSilentAim()
+
+--------------------------------------------------------------------
+-- Auto-Collect with realistic tween
+local collectTween = nil
+
+local function findNearestCollectible()
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return nil end
+    local root = LocalPlayer.Character.HumanoidRootPart
+    local nearest = nil
+    local minDist = AutoCollect.Range
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Position then
+            local collect = false
+            if AutoCollect.CollectCoins and obj.Name:lower():find("coin") then
+                collect = true
+            elseif AutoCollect.CollectGifts and obj.Name:lower():find("gift") then
+                collect = true
+            end
+            if collect then
+                local dist = (obj.Position - root.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    nearest = obj
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+local function collectLoop()
+    while Features.AutoCollect do
+        local target = findNearestCollectible()
+        if target and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local root = LocalPlayer.Character.HumanoidRootPart
+            local distance = (target.Position - root.Position).Magnitude
+            if distance > 3 then
+                local time = distance / AutoCollect.TweenSpeed
+                if collectTween then collectTween:Cancel() end
+                collectTween = TweenService:Create(root, TweenInfo.new(time, Enum.EasingStyle.Linear), {
+                    CFrame = CFrame.new(target.Position) * CFrame.new(0, 0, -2)
+                })
+                collectTween:Play()
+                collectTween.Completed:Wait()
+            else
+                task_wait(0.2)
+            end
+        else
+            task_wait(0.5)
+        end
+    end
+    if collectTween then collectTween:Cancel() end
+end
+
+--------------------------------------------------------------------
+-- SIMPLE & RELIABLE TELEPORT FUNCTIONS
+--------------------------------------------------------------------
+
+-- Helper to find ground below a point
+local function findGround(position)
+    local ray = Ray.new(position + Vector3.new(0, 50, 0), Vector3.new(0, -200, 0))
+    local hit, hitPos = Workspace:FindPartOnRay(ray, LocalPlayer.Character)
+    if hit then
+        return hitPos + Vector3.new(0, 3, 0) -- stand on ground
+    end
+    return position -- fallback to original
+end
+
+-- Teleport to murderer/sheriff (directly next to them)
+local function teleportTo(targetRole)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            if getPlayerRole(player) == targetRole then
+                local targetPos = player.Character.HumanoidRootPart.Position
+                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.new(0, 0, -3)
+                showNotification("Teleported to " .. targetRole, 2)
+                break
+            end
+        end
+    end
+end
+
+-- Teleport to spawn (find a SpawnLocation or part with "spawn" in name)
+local function teleportToSpawn()
+    local spawnObj = nil
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("SpawnLocation") then
+            spawnObj = obj
+            break
+        end
+    end
+    if not spawnObj then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and (obj.Name:lower():find("spawn") or obj.Name:lower():find("start")) then
+                spawnObj = obj
+                break
+            end
+        end
+    end
+    if spawnObj and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local spawnPos = spawnObj.Position
+        -- Find ground at that location
+        local safePos = findGround(spawnPos)
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(safePos)
+        showNotification("Teleported to Spawn", 2)
+    else
+        -- Fallback: teleport to (0,50,0) and ground
+        local safePos = findGround(Vector3.new(0, 100, 0))
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(safePos)
+        showNotification("Teleported to Fallback Spawn", 2)
+    end
+end
+
+-- Teleport to map center (average of all players' positions)
+local function teleportToMapCenter()
+    if not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")) then
+        showNotification("No character found", 2)
+        return
+    end
+
+    local totalPos = Vector3.new(0, 0, 0)
+    local count = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            totalPos = totalPos + player.Character.HumanoidRootPart.Position
+            count = count + 1
+        end
+    end
+
+    local center
+    if count > 0 then
+        center = totalPos / count
+    else
+        center = Vector3.new(0, 100, 0) -- fallback
+    end
+
+    -- Find ground at center
+    local safePos = findGround(center)
+    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(safePos)
+    showNotification("Teleported to Map Center", 2)
+end
+
+--------------------------------------------------------------------
+-- UI Building
+
+-- Helper to create toggle slider
+local function createToggle(parent, yPos, text, getFunc, setFunc, onColor)
+    onColor = onColor or Color3_fromRGB(80, 255, 80)
+    local frame = new("Frame", {
+        Parent = parent,
+        Size = UDim2.new(0.9, 0, 0, 50),
+        Position = UDim2.new(0.05, 0, 0, yPos),
+        BackgroundColor3 = Color3_fromRGB(35, 35, 35),
+        ZIndex = Z
+    })
+    new("UICorner", { Parent = frame, CornerRadius = UDim.new(0, 8) })
+    new("UIStroke", { Parent = frame, Color = Color3_fromRGB(60, 60, 60), Thickness = 1 })
+    local label = new("TextLabel", {
+        Parent = frame,
+        Size = UDim2.new(0.6, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = Color3_fromRGB(255,255,255),
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = Z
+    })
+    local bg = new("Frame", {
+        Parent = frame,
+        Size = UDim2.new(0, 70, 0, 30),
+        Position = UDim2.new(1, -80, 0.5, -15),
+        BackgroundColor3 = Color3_fromRGB(60, 60, 60),
+        ZIndex = Z
+    })
+    new("UICorner", { Parent = bg, CornerRadius = UDim.new(1, 0) })
+    local slider = new("Frame", {
+        Parent = bg,
+        Size = UDim2.new(0, 26, 0, 26),
+        Position = UDim2.new(0, 2, 0, 2),
+        BackgroundColor3 = Color3_fromRGB(255, 80, 80),
+        ZIndex = Z + 1
+    })
+    new("UICorner", { Parent = slider, CornerRadius = UDim.new(1, 0) })
+    new("UIStroke", { Parent = slider, Color = Color3_fromRGB(255,255,255), Thickness = 1 })
+    local btn = new("TextButton", {
+        Parent = frame,
+        Size = UDim2.new(0, 70, 0, 30),
+        Position = UDim2.new(1, -80, 0.5, -15),
+        BackgroundTransparency = 1,
+        Text = "",
+        ZIndex = Z + 2
+    })
+    local updateVis = function()
+        local state = getFunc()
+        if state then
+            slider:TweenPosition(UDim2.new(1, -28, 0, 2), "Out", "Quad", 0.2, true)
+            slider.BackgroundColor3 = onColor
+            bg.BackgroundColor3 = Color3_fromRGB(40, 80, 40)
+        else
+            slider:TweenPosition(UDim2.new(0, 2, 0, 2), "Out", "Quad", 0.2, true)
+            slider.BackgroundColor3 = Color3_fromRGB(255, 80, 80)
+            bg.BackgroundColor3 = Color3_fromRGB(60, 60, 60)
+        end
+    end
+    updateVis()
+    btn.MouseButton1Click:Connect(function()
+        local newState = not getFunc()
+        setFunc(newState)
+        updateVis()
+        showNotification(text .. " " .. (newState and "Enabled" or "Disabled"), 2)
+        if text == "Player ESP" and not newState then
+            clearPlayerESP()
+        elseif text == "Gun ESP" and not newState then
+            clearGunESP()
+        elseif text == "Auto-Collect" then
+            if newState then
+                task_spawn(collectLoop)
+            else
+                if collectTween then collectTween:Cancel() end
+            end
+        end
+    end)
+    return frame
+end
+
+-- Home Tab
+local homePage = pages["Home"]
+local welcome = new("TextLabel", {
+    Parent = homePage,
+    Size = UDim2.new(0.9, 0, 0, 120),
+    Position = UDim2.new(0.05, 0, 0.02, 0),
+    BackgroundColor3 = Color3_fromRGB(30,30,30),
+    BackgroundTransparency = 0.3,
+    Text = "Vynx.cc MM2\nComplete Murder Mystery 2 script\nby Kynx.dev\n\nPress Insert to toggle menu",
+    TextColor3 = Color3_fromRGB(255,255,255),
+    TextSize = 18,
+    Font = Enum.Font.Gotham,
+    TextWrapped = true,
+    ZIndex = Z
+})
+new("UICorner", { Parent = welcome, CornerRadius = UDim.new(0,8) })
+new("UIStroke", { Parent = welcome, Color = Color3_fromRGB(255,60,60), Thickness = 1 })
+
+-- ESP Tab
+local espPage = pages["ESP"]
+createToggle(espPage, 10, "Player ESP", function() return Features.PlayerESP end, function(v) Features.PlayerESP = v end)
+createToggle(espPage, 70, "Gun ESP", function() return Features.GunESP end, function(v) Features.GunESP = v end)
+
+-- Aimbot Tab
+local aimPage = pages["Aimbot"]
+createToggle(aimPage, 10, "Silent Aimbot", function() return Features.Aimbot end, function(v) Features.Aimbot = v end)
+createToggle(aimPage, 70, "Team Check", function() return Features.TeamCheck end, function(v) Features.TeamCheck = v end)
+
+-- Auto Tab
+local autoPage = pages["Auto"]
+createToggle(autoPage, 10, "Auto-Collect", function() return Features.AutoCollect end, function(v) Features.AutoCollect = v end)
+
+-- Teleport Tab
+local telePage = pages["Teleport"]
+local tpMurderer = new("TextButton", {
+    Parent = telePage,
+    Size = UDim2.new(0.8,0,0,40),
+    Position = UDim2.new(0.1,0,0.1,0),
+    BackgroundColor3 = Color3_fromRGB(200,50,50),
+    Text = "Teleport to Murderer",
+    TextColor3 = Color3_fromRGB(255,255,255),
+    TextSize = 16,
+    Font = Enum.Font.GothamBold,
+    ZIndex = Z
+})
+new("UICorner", { Parent = tpMurderer, CornerRadius = UDim.new(0,6) })
+tpMurderer.MouseButton1Click:Connect(function() teleportTo("Murderer") end)
+
+local tpSheriff = new("TextButton", {
+    Parent = telePage,
+    Size = UDim2.new(0.8,0,0,40),
+    Position = UDim2.new(0.1,0,0.25,0),
+    BackgroundColor3 = Color3_fromRGB(50,50,200),
+    Text = "Teleport to Sheriff",
+    TextColor3 = Color3_fromRGB(255,255,255),
+    TextSize = 16,
+    Font = Enum.Font.GothamBold,
+    ZIndex = Z
+})
+new("UICorner", { Parent = tpSheriff, CornerRadius = UDim.new(0,6) })
+tpSheriff.MouseButton1Click:Connect(function() teleportTo("Sheriff") end)
+
+local tpSpawn = new("TextButton", {
+    Parent = telePage,
+    Size = UDim2.new(0.8,0,0,40),
+    Position = UDim2.new(0.1,0,0.4,0),
+    BackgroundColor3 = Color3_fromRGB(50,150,50),
+    Text = "Teleport to Spawn",
+    TextColor3 = Color3_fromRGB(255,255,255),
+    TextSize = 16,
+    Font = Enum.Font.GothamBold,
+    ZIndex = Z
+})
+new("UICorner", { Parent = tpSpawn, CornerRadius = UDim.new(0,6) })
+tpSpawn.MouseButton1Click:Connect(teleportToSpawn)
+
+local tpCenter = new("TextButton", {
+    Parent = telePage,
+    Size = UDim2.new(0.8,0,0,40),
+    Position = UDim2.new(0.1,0,0.55,0),
+    BackgroundColor3 = Color3_fromRGB(150,150,50),
+    Text = "Teleport to Map Center",
+    TextColor3 = Color3_fromRGB(255,255,255),
+    TextSize = 16,
+    Font = Enum.Font.GothamBold,
+    ZIndex = Z
+})
+new("UICorner", { Parent = tpCenter, CornerRadius = UDim.new(0,6) })
+tpCenter.MouseButton1Click:Connect(teleportToMapCenter)
+
+-- Settings Tab
+local settingsPage = pages["Settings"]
+local keybindLabel = new("TextLabel", {
+    Parent = settingsPage,
+    Size = UDim2.new(0.9,0,0,50),
+    Position = UDim2.new(0.05,0,0.1,0),
+    BackgroundColor3 = Color3_fromRGB(35,35,35),
+    Text = "Toggle Key: Insert",
+    TextColor3 = Color3_fromRGB(255,255,255),
+    TextSize = 18,
+    Font = Enum.Font.GothamBold,
+    ZIndex = Z
+})
+new("UICorner", { Parent = keybindLabel, CornerRadius = UDim.new(0,8) })
+
+-- About Tab
+local aboutPage = pages["About"]
+local aboutText = new("TextLabel", {
+    Parent = aboutPage,
+    Size = UDim2.new(0.9,0,0,200),
+    Position = UDim2.new(0.05,0,0.1,0),
+    BackgroundColor3 = Color3_fromRGB(30,30,30),
+    Text = "Vynx.cc MM2\nVersion 3.2\n\nFeatures:\n- Player ESP (Murderer/Sheriff/Innocent)\n- Gun ESP (dropped guns)\n- Silent Aimbot (auto-hit murderer)\n- Auto-Collect with realistic tween movement\n- Teleport to Murderer, Sheriff, Spawn, Map Center\n- Clean UI\n\nMade by Kynx.dev\nDiscord: discord.gg/wYzQeXGyqH",
+    TextColor3 = Color3_fromRGB(255,255,255),
+    TextSize = 16,
+    Font = Enum.Font.Gotham,
+    TextWrapped = true,
+    ZIndex = Z
+})
+new("UICorner", { Parent = aboutText, CornerRadius = UDim.new(0,8) })
+new("UIStroke", { Parent = aboutText, Color = Color3_fromRGB(100,100,255), Thickness = 1 })
+
+--------------------------------------------------------------------
+-- Dragging and menu toggle
+local dragging, dragStart, startPos
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+    end
+end)
+titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+UIS.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+local visible = true
+UIS.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.Insert then
+        visible = not visible
+        if visible then
+            screenGui.Enabled = true
+            main.Visible = true
+            main:TweenPosition(UDim2.new(0.5, -WIDTH/2, 0.5, -HEIGHT/2), "Out", "Quad", 0.2, true)
+            main:TweenSize(UDim2.new(0, WIDTH, 0, HEIGHT), "Out", "Quad", 0.2, true)
+        else
+            main:TweenPosition(UDim2.new(0.5, -WIDTH/2, 0, -HEIGHT), "Out", "Quad", 0.2, true)
+            main:TweenSize(UDim2.new(0, WIDTH, 0, 0), "Out", "Quad", 0.2, true, function()
+                screenGui.Enabled = false
+            end)
+        end
+    end
+end)
+
+print("Vynx.cc MM2 script v3.2 loaded! Press Insert to toggle menu.")
+print("ESP updates every 1 second. Teleport improved: murderer/sheriff next to target, spawn/center with ground detection.")
