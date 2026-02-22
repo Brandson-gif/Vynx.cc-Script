@@ -1,6 +1,6 @@
 -- Vynx.cc MM2 Script - Complete Murder Mystery 2 Utility
 -- Press Insert to open/close | Drag from title bar | Tabs with fold animations
--- Features: ESP (murderer/sheriff/innocent + guns), Silent Aimbot (closest murderer), Auto-Collect (realistic tween), Teleport to roles/spawn/center
+-- Features: ESP (murderer/sheriff/innocent + guns), Silent Aimbot (closest murderer), Auto-Collect (realistic tween into coin), Teleport to roles/spawn/center
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
@@ -557,7 +557,7 @@ task.wait(1)
 setupSilentAim()
 
 --------------------------------------------------------------------
--- Auto-Collect with realistic tween
+-- Auto-Collect with realistic tween (nu direct in de munt)
 local collectTween = nil
 
 local function findNearestCollectible()
@@ -594,8 +594,9 @@ local function collectLoop()
             if distance > 3 then
                 local time = distance / AutoCollect.TweenSpeed
                 if collectTween then collectTween:Cancel() end
+                -- Aanpassing: tween direct naar de positie van de munt (geen offset)
                 collectTween = TweenService:Create(root, TweenInfo.new(time, Enum.EasingStyle.Linear), {
-                    CFrame = CFrame.new(target.Position) * CFrame.new(0, 0, -2)
+                    CFrame = CFrame.new(target.Position)  -- Ga precies naar de munt
                 })
                 collectTween:Play()
                 collectTween.Completed:Wait()
@@ -893,7 +894,7 @@ local aboutText = new("TextLabel", {
     Size = UDim2.new(0.9,0,0,200),
     Position = UDim2.new(0.05,0,0.1,0),
     BackgroundColor3 = Color3_fromRGB(30,30,30),
-    Text = "Vynx.cc MM2\nVersion 3.2\n\nFeatures:\n- Player ESP (Murderer/Sheriff/Innocent)\n- Gun ESP (dropped guns)\n- Silent Aimbot (auto-hit murderer)\n- Auto-Collect with realistic tween movement\n- Teleport to Murderer, Sheriff, Spawn, Map Center\n- Clean UI\n\nMade by Kynx.dev\nDiscord: discord.gg/wYzQeXGyqH",
+    Text = "Vynx.cc MM2\nVersion 3.2\n\nFeatures:\n- Player ESP (Murderer/Sheriff/Innocent)\n- Gun ESP (dropped guns)\n- Silent Aimbot (auto-hit murderer)\n- Auto-Collect with realistic tween movement (nu direct in de munt)\n- Teleport to Murderer, Sheriff, Spawn, Map Center\n- Clean UI\n\nMade by Kynx.dev\nDiscord: discord.gg/wYzQeXGyqH",
     TextColor3 = Color3_fromRGB(255,255,255),
     TextSize = 16,
     Font = Enum.Font.Gotham,
@@ -945,3 +946,4 @@ end)
 
 print("Vynx.cc MM2 script v3.2 loaded! Press Insert to toggle menu.")
 print("ESP updates every 1 second. Teleport improved: murderer/sheriff next to target, spawn/center with ground detection.")
+print("Auto-Collect now tweens DIRECTLY INTO the coin for reliable collection.")
